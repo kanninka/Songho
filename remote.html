@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Songho — Jeu en Réseau</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:     #1a0e00;
+      --board:  #2d1a00;
+      --pit:    #3d2600;
+      --seed:   #d4a84b;
+      --nord:   #5b9bd5;
+      --sud:    #e05c2a;
+      --border: #5a3a10;
+      --muted:  #8a6a40;
+    }
+    body {
+      background: var(--bg); color: #fff;
+      font-family: 'Georgia', serif;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 1rem; position: relative;
+    }
+    .dots {
+      position: fixed; inset: 0; pointer-events: none;
+      background-image: radial-gradient(circle, #fff8e8 1px, transparent 1px);
+      background-size: 24px 24px; opacity: .07;
+    }
+
+    header {
+      width: 100%; max-width: 860px; display: flex;
+      align-items: center; justify-content: space-between;
+      margin-bottom: 1.5rem; position: relative; z-index: 1;
+    }
+    .back { font-family:sans-serif; font-size:.85rem; color:var(--muted); text-decoration:none; }
+    .back:hover { color: var(--seed); }
+    h1 { font-size: 2.8rem; color: var(--seed); text-align:center; }
+    .sub { font-family:sans-serif; font-size:.7rem; letter-spacing:.25em;
+           text-transform:uppercase; color:var(--muted); margin-top:.2rem; text-align:center; }
+
+    /* ---- Lobby ---- */
+    #lobby {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 1.25rem; width: 100%; max-width: 380px;
+      position: relative; z-index: 1;
+    }
+
+    .btn {
+      font-family:sans-serif; font-size:.95rem; font-weight:700;
+      padding: .85rem 1.5rem; border-radius: .75rem; cursor:pointer;
+      border: 2px solid var(--border); background: var(--pit); color: #fff;
+      transition: all .2s;
+    }
+    .btn:hover:not(:disabled) { background: var(--board); border-color: var(--seed); }
+    .btn.create { width:100%; background:var(--board); border-color:rgba(224,92,42,.4); }
+    .btn.create:hover { border-color:var(--sud); }
+    .btn.join-btn { padding:.85rem 1.25rem; border-color:rgba(91,155,213,.4); }
+    .btn.join-btn:hover { border-color:var(--nord); }
+    .btn.primary { background:var(--seed); color:#1a0e00; border-color:var(--seed); width:100%; }
+    .btn.primary:hover { opacity:.85; }
+    .btn:disabled { opacity:.5; cursor:default; }
+
+    .divider {
+      display:flex; align-items:center; gap:.75rem; width:100%;
+    }
+    .divider .line { flex:1; height:1px; background:rgba(90,58,16,.5); }
+    .divider span { font-family:sans-serif; font-size:.7rem; letter-spacing:.2em;
+                    text-transform:uppercase; color:var(--muted); }
+
+    .join-row { display:flex; gap:.5rem; width:100%; }
+    input[type=text] {
+      flex:1; background:var(--board); border:2px solid rgba(90,58,16,.6);
+      border-radius:.75rem; padding:.85rem 1rem; color:#fff; font-family:monospace;
+      font-size:1.3rem; letter-spacing:.2em; text-align:center; text-transform:uppercase;
+      outline:none; transition:border-color .2s;
+    }
+    input[type=text]:focus { border-color:rgba(91,155,213,.6); }
+    input::placeholder { color:rgba(138,106,64,.5); letter-spacing:.05em; font-size:1rem; }
+
+    .error-msg {
+      font-family:sans-serif; font-size:.82rem; color:#f87171;
+      display:flex; align-items:center; gap:.4rem;
+    }
+    .hint { font-family:sans-serif; font-size:.78rem; color:var(--muted); text-align:center; }
+    .hint span { font-weight:700; }
+
+    /* ---- Attente adversaire ---- */
+    #waiting {
+      display:none; flex-direction:column; align-items:center; gap:1.25rem;
+      position:relative; z-index:1;
+    }
+    .code-card {
+      background:var(--board); border:1px solid var(--border);
+      border-radius:1.25rem; padding:1.5rem 2rem;
+      display:flex; flex-direction:column; align-items:center; gap:.75rem;
+      box-shadow:0 4px 24px rgba(0,0,0,.5);
+    }
+    .code-label { font-family:sans-serif; font-size:.7rem; letter-spacing:.25em;
+                  text-transform:uppercase; color:var(--muted); }
+    .code-val { font-family:monospace; font-size:3rem; font-weight:700;
+                color:#fff; letter-spacing:.25em; }
+    .copy-btn {
+      font-family:sans-serif; font-size:.8rem; font-weight:600;
+      padding:.4rem .9rem; border-radius:.5rem; cursor:pointer;
+      border:1px solid var(--border); background:var(--pit); color:var(--seed);
+      transition:all .2s;
+    }
+    .copy-btn:hover { border-color:var(--seed); }
+    .spinner {
+      display:inline-block; width:18px; height:18px;
+      border:2px solid var(--border); border-top-color:var(--muted);
+      border-radius:50%; animation:spin .8s linear infinite; vertical-align:middle;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .waiting-text { font-family:sans-serif; font-size:.9rem; color:var(--muted);
+                    display:flex; align-items:center; gap:.5rem; }
+    .cancel-link { font-family:sans-serif; font-size:.75rem; color:rgba(138,106,64,.4);
+                   cursor:pointer; text-decoration:underline; }
+    .cancel-link:hover { color:var(--muted); }
+
+    /* ---- Badge de rôle ---- */
+    #roleBadge {
+      display:none; font-family:sans-serif; font-size:.75rem; font-weight:700;
+      letter-spacing:.15em; text-transform:uppercase;
+      padding:.35rem 1rem; border-radius:99px; border:2px solid;
+      position:relative; z-index:1;
+    }
+    #roleBadge.nord { color:var(--nord); border-color:rgba(91,155,213,.5);background:rgba(91,155,213,.1); }
+    #roleBadge.sud  { color:var(--sud);  border-color:rgba(224,92,42,.5); background:rgba(224,92,42,.1);  }
+
+    /* ---- Plateau ---- */
+    #game { display:none; flex-direction:column; align-items:center;
+            gap:1rem; width:100%; max-width:860px; position:relative; z-index:1; }
+
+    .score-bar {
+      width:100%; background:var(--board); border-radius:1rem;
+      padding:1rem 1.5rem; display:flex; align-items:center;
+      justify-content:space-between; border:1px solid var(--border);
+    }
+    .player-score {
+      display:flex; flex-direction:column; align-items:center;
+      padding:.6rem 1.2rem; border-radius:.75rem;
+      border:2px solid transparent; transition:all .3s; min-width:100px;
+    }
+    .player-score.act-nord { background:rgba(91,155,213,.15); border-color:var(--nord); }
+    .player-score.act-sud  { background:rgba(224,92,42,.15);  border-color:var(--sud); }
+    .player-score .pname { font-family:sans-serif;font-size:.75rem;font-weight:700;
+                           letter-spacing:.15em;text-transform:uppercase;margin-bottom:.25rem; }
+    .player-score.nord .pname { color:var(--nord); }
+    .player-score.sud  .pname { color:var(--sud); }
+    .player-score .pts { font-size:2.5rem; }
+    .turn-info { text-align:center; }
+    .turn-info .label { font-family:sans-serif;font-size:.7rem;letter-spacing:.15em;
+                        text-transform:uppercase;color:var(--muted); }
+    .turn-info .num { font-family:monospace;font-size:1.5rem;font-weight:700;color:var(--seed); }
+
+    .status-line {
+      height:2rem; display:flex; align-items:center; justify-content:center;
+      font-family:sans-serif; font-size:.95rem; font-weight:600; gap:.5rem;
+    }
+    .status-line.myturn { color:var(--seed); animation:pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+    .status-line.wait   { color:var(--muted); }
+
+    .board-wrap {
+      background:var(--board); border-radius:2.5rem; padding:2rem 2.5rem;
+      border:3px solid var(--border); box-shadow:0 8px 40px rgba(0,0,0,.6);
+      display:flex; flex-direction:column; gap:1.25rem;
+    }
+    .row { display:flex; gap:1rem; justify-content:center; }
+    .sep { height:3px; background:var(--pit); border-radius:99px; opacity:.5; margin:0 1rem; }
+
+    .pit {
+      width:72px; height:72px; border-radius:50%;
+      background:var(--pit); border:3px solid var(--border);
+      display:flex; align-items:center; justify-content:center;
+      cursor:default; position:relative; transition:all .2s; flex-shrink:0;
+    }
+    .pit .count { position:absolute; z-index:2; font-size:1.5rem; font-weight:700;
+                  color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.8); }
+    .pit .count.zero { color:rgba(90,58,16,.5); }
+    .pit.legal { cursor:pointer; }
+    .pit.legal.nord { border-color:var(--nord); box-shadow:0 0 14px rgba(91,155,213,.5); }
+    .pit.legal.sud  { border-color:var(--sud);  box-shadow:0 0 14px rgba(224,92,42,.5); }
+    .pit.legal:hover { transform:scale(1.1); }
+    .seeds-bg {
+      position:absolute; inset:8px; display:flex;
+      flex-wrap:wrap; align-items:center; justify-content:center;
+      gap:2px; opacity:.35;
+    }
+    .seed-dot { width:8px; height:8px; border-radius:50%; background:var(--seed); }
+
+    .quit-link { font-family:sans-serif;font-size:.75rem;color:rgba(138,106,64,.35);
+                 cursor:pointer;text-decoration:underline; }
+    .quit-link:hover { color:var(--muted); }
+
+    /* ---- Overlay fin ---- */
+    .overlay {
+      position:fixed; inset:0; z-index:50; background:rgba(26,14,0,.85);
+      backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;
+      animation:fadein .3s ease;
+    }
+    @keyframes fadein { from{opacity:0} to{opacity:1} }
+    .overlay.hidden { display:none; }
+    .overlay-card {
+      background:var(--board); border:1px solid var(--border); border-radius:1.5rem;
+      padding:2.5rem; max-width:380px; width:90%;
+      display:flex; flex-direction:column; align-items:center; text-align:center; gap:1rem;
+      box-shadow:0 8px 48px rgba(0,0,0,.8);
+    }
+    .trophy { font-size:3.5rem; }
+    .overlay-title { font-size:2.2rem; color:#fff; }
+    .winner-lbl { font-size:1.1rem; font-weight:700; }
+    .winner-lbl.nord { color:var(--nord); } .winner-lbl.sud { color:var(--sud); }
+    .winner-lbl.draw { color:var(--seed); }
+    .reason-txt { font-family:sans-serif; font-size:.85rem; color:var(--muted); }
+    .final-scores {
+      display:flex; gap:2rem; align-items:center;
+      padding:.75rem 2rem; background:var(--pit); border-radius:.75rem;
+    }
+    .fs { display:flex;flex-direction:column;align-items:center;gap:.25rem; }
+    .fs .fn { font-family:sans-serif;font-size:.8rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase; }
+    .fs.nord .fn { color:var(--nord); } .fs.sud .fn { color:var(--sud); }
+    .fs .fv { font-size:2rem; }
+    .divl { width:1px; background:var(--border); align-self:stretch; }
+
+    footer {
+      margin-top:1.5rem; font-family:sans-serif; font-size:.65rem;
+      letter-spacing:.2em; text-transform:uppercase;
+      color:rgba(138,106,64,.4); position:relative; z-index:1;
+    }
+
+    @media (max-width:600px) {
+      .pit { width:44px; height:44px; }
+      .pit .count { font-size:1rem; }
+      .board-wrap { padding:1rem 1.2rem; gap:.75rem; }
+      .row { gap:.5rem; }
+      h1 { font-size:2rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="dots"></div>
+
+  <header>
+    <a href="index.html" class="back">← Accueil</a>
+    <div>
+      <h1>Songho</h1>
+      <div class="sub">Réseau</div>
+    </div>
+    <div style="width:80px"></div>
+  </header>
+
+  <!-- Badge rôle -->
+  <div id="roleBadge"></div>
+
+  <!-- LOBBY -->
+  <div id="lobby">
+    <button class="btn create" id="btnCreate" onclick="createGame()">
+      Créer une partie
+      <div style="font-family:sans-serif;font-size:.78rem;color:var(--muted);margin-top:.2rem;font-weight:400;">
+        Vous jouez en tant que <span style="color:var(--sud);font-weight:700;">Sud</span>
+      </div>
+    </button>
+
+    <div class="divider">
+      <div class="line"></div><span>ou</span><div class="line"></div>
+    </div>
+
+    <div class="join-row">
+      <input type="text" id="codeInput" placeholder="Code de partie" maxlength="6"
+             oninput="this.value=this.value.toUpperCase()"
+             onkeydown="if(event.key==='Enter')joinGame()" />
+      <button class="btn join-btn" id="btnJoin" onclick="joinGame()">Rejoindre</button>
+    </div>
+    <div class="hint">Rejoindre = vous jouez en tant que <span style="color:var(--nord);">Nord</span></div>
+    <div class="error-msg hidden" id="joinError">⚠ <span id="joinErrorText"></span></div>
+  </div>
+
+  <!-- ATTENTE ADVERSAIRE -->
+  <div id="waiting">
+    <div class="code-card">
+      <div class="code-label">Code de la partie</div>
+      <div class="code-val" id="displayCode">------</div>
+      <button class="copy-btn" onclick="copyCode()">📋 Copier le code</button>
+      <div style="font-family:sans-serif;font-size:.8rem;color:var(--muted);">
+        Partagez ce code avec votre adversaire
+      </div>
+    </div>
+    <div class="waiting-text">
+      <span class="spinner"></span> En attente de l'adversaire...
+    </div>
+    <span class="cancel-link" onclick="resetToLobby()">Annuler</span>
+  </div>
+
+  <!-- PLATEAU DE JEU -->
+  <div id="game">
+    <div class="score-bar">
+      <div class="player-score nord" id="scoreNord">
+        <div class="pname">Nord</div>
+        <div class="pts" id="ptsNord">0</div>
+      </div>
+      <div class="turn-info">
+        <div class="label">Tour</div>
+        <div class="num" id="moveNum">0</div>
+      </div>
+      <div class="player-score sud" id="scoreSud">
+        <div class="pname">Sud</div>
+        <div class="pts" id="ptsSud">0</div>
+      </div>
+    </div>
+
+    <div class="status-line" id="statusLine">—</div>
+
+    <div class="board-wrap">
+      <div class="row" id="rowNord"></div>
+      <div class="sep"></div>
+      <div class="row" id="rowSud"></div>
+    </div>
+
+    <span class="quit-link" onclick="resetToLobby()">Quitter la partie</span>
+  </div>
+
+  <footer>KANNINKA IYA ISAMEL &bull; 24G2152</footer>
+
+  <!-- OVERLAY FIN -->
+  <div class="overlay hidden" id="overlay">
+    <div class="overlay-card">
+      <div class="trophy">🏆</div>
+      <div class="overlay-title" id="overlayTitle"></div>
+      <div class="winner-lbl" id="overlayWinner"></div>
+      <div class="reason-txt" id="overlayReason"></div>
+      <div class="final-scores">
+        <div class="fs nord"><div class="fn">Nord</div><div class="fv" id="fNord">0</div></div>
+        <div class="divl"></div>
+        <div class="fs sud"><div class="fn">Sud</div><div class="fv" id="fSud">0</div></div>
+      </div>
+      <button class="btn primary" onclick="resetToLobby()">Nouvelle partie</button>
+    </div>
+  </div>
+
+  <script>
+  /* =======================================================
+     CONFIGURATION — Modifiez ce chemin si nécessaire
+     ======================================================= */
+  const API = 'api';   // dossier api/ (relatif à remote.html)
+
+  /* -------------------------------------------------------
+     ÉTAT LOCAL
+     ------------------------------------------------------- */
+  let myCode    = null;   // code de la partie
+  let myToken   = null;   // token d'authentification
+  let myRole    = null;   // 'north' | 'south'
+  let pollTimer = null;   // setInterval pour le polling Ajax
+  let lastGame  = null;   // dernier état reçu du serveur
+
+  /* -------------------------------------------------------
+     UTILITAIRES UI
+     ------------------------------------------------------- */
+  function show(id)  { document.getElementById(id).style.display = 'flex'; }
+  function hide(id)  { document.getElementById(id).style.display = 'none'; }
+  function hideById(id){ const el=document.getElementById(id); if(el) el.classList.add('hidden'); }
+  function showById(id){ const el=document.getElementById(id); if(el) el.classList.remove('hidden'); }
+
+  function reasonText(r) {
+    return {
+      score_40: 'A atteint 40 graines !',
+      low_board: 'Moins de 10 graines sur le tablier',
+      solidarity_impossible: "Impossible de nourrir l'adversaire",
+      no_legal_move: 'Aucun coup légal possible',
+    }[r] || '';
+  }
+
+  /* -------------------------------------------------------
+     CRÉER UNE PARTIE (Ajax POST)
+     ------------------------------------------------------- */
+  function createGame() {
+    const btn = document.getElementById('btnCreate');
+    btn.disabled = true;
+    btn.textContent = 'Création...';
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}/create_game.php`, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function () {
+      btn.disabled = false;
+      btn.innerHTML = 'Créer une partie<div style="font-family:sans-serif;font-size:.78rem;color:var(--muted);margin-top:.2rem;font-weight:400;">Vous jouez en tant que <span style="color:var(--sud);font-weight:700;">Sud</span></div>';
+      if (xhr.status === 200 || xhr.status === 201) {
+        const data = JSON.parse(xhr.responseText);
+        myCode  = data.code;
+        myToken = data.token;
+        myRole  = data.role;
+        enterWaiting();
+      } else {
+        alert('Erreur lors de la création de la partie.');
+      }
+    };
+    xhr.onerror = function () {
+      btn.disabled = false;
+      alert('Erreur réseau. Vérifiez que le serveur PHP tourne.');
+    };
+    xhr.send();
+  }
+
+  /* -------------------------------------------------------
+     REJOINDRE UNE PARTIE (Ajax POST)
+     ------------------------------------------------------- */
+  function joinGame() {
+    const code = document.getElementById('codeInput').value.trim().toUpperCase();
+    if (!code) return;
+
+    document.getElementById('joinError').classList.add('hidden');
+    const btn = document.getElementById('btnJoin');
+    btn.disabled = true;
+    btn.textContent = '...';
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}/join_game.php`, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function () {
+      btn.disabled = false;
+      btn.textContent = 'Rejoindre';
+      if (xhr.status === 200) {
+        const data = JSON.parse(xhr.responseText);
+        myCode  = code;
+        myToken = data.token;
+        myRole  = data.role;
+        // Passe directement au jeu
+        hide('lobby');
+        showRoleBadge();
+        startPolling();
+      } else {
+        const err = JSON.parse(xhr.responseText);
+        document.getElementById('joinErrorText').textContent =
+          err.error || 'Code introuvable ou partie complète.';
+        document.getElementById('joinError').classList.remove('hidden');
+      }
+    };
+    xhr.onerror = function () {
+      btn.disabled = false;
+      alert('Erreur réseau.');
+    };
+    xhr.send(JSON.stringify({ code }));
+  }
+
+  /* -------------------------------------------------------
+     PHASE D'ATTENTE (Sud attend Nord)
+     ------------------------------------------------------- */
+  function enterWaiting() {
+    hide('lobby');
+    document.getElementById('displayCode').textContent = myCode;
+    show('waiting');
+    showRoleBadge();
+    startPolling();
+  }
+
+  function copyCode() {
+    navigator.clipboard.writeText(myCode).then(() => {
+      const btn = document.querySelector('.copy-btn');
+      btn.textContent = '✓ Copié !';
+      setTimeout(() => btn.textContent = '📋 Copier le code', 2000);
+    });
+  }
+
+  /* -------------------------------------------------------
+     BADGE DE RÔLE
+     ------------------------------------------------------- */
+  function showRoleBadge() {
+    const badge = document.getElementById('roleBadge');
+    badge.style.display = 'inline-block';
+    badge.className = `nord` === myRole ? 'nord' : 'sud';
+    badge.textContent = `Vous jouez : ${myRole === 'north' ? 'Nord' : 'Sud'}`;
+    badge.id = 'roleBadge'; // keep id
+  }
+
+  /* -------------------------------------------------------
+     POLLING AJAX — interroge le serveur toutes les 2 s
+     ------------------------------------------------------- */
+  function startPolling() {
+    stopPolling();
+    poll(); // premier appel immédiat
+    pollTimer = setInterval(poll, 2000);
+  }
+
+  function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  function poll() {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `${API}/get_game.php?code=${myCode}&token=${myToken}`, true);
+    xhr.onload = function () {
+      if (xhr.status === 200) {
+        const data = JSON.parse(xhr.responseText);
+        handleGameData(data);
+      }
+    };
+    xhr.send();
+  }
+
+  /* -------------------------------------------------------
+     MISE À JOUR DE L'INTERFACE SELON L'ÉTAT REÇU
+     ------------------------------------------------------- */
+  function handleGameData(data) {
+    lastGame = data;
+
+    // Partie terminée : stopper le polling
+    if (data.status === 'ended') {
+      stopPolling();
+      showGame(data);
+      showOverlay(data);
+      return;
+    }
+
+    // Partie en attente d'adversaire
+    if (data.sessionStatus === 'waiting') {
+      // reste sur l'écran d'attente, rien de plus
+      return;
+    }
+
+    // Partie en cours
+    hide('waiting');
+    showGame(data);
+
+    // Si c'est notre tour, on stoppe le polling (on attend l'action du joueur)
+    // Sinon, on continue à interroger
+    const isMyTurn = data.currentPlayer === myRole;
+    if (isMyTurn && pollTimer) {
+      stopPolling();
+    } else if (!isMyTurn && !pollTimer) {
+      startPolling();
+    }
+  }
+
+  /* -------------------------------------------------------
+     AFFICHAGE DU PLATEAU
+     ------------------------------------------------------- */
+  function showGame(data) {
+    hide('lobby');
+    hide('waiting');
+    show('game');
+
+    // Scores
+    document.getElementById('ptsNord').textContent = data.scores.north;
+    document.getElementById('ptsSud').textContent  = data.scores.south;
+    document.getElementById('moveNum').textContent  = data.moveNumber;
+
+    // Highlight joueur actif
+    document.getElementById('scoreNord').className =
+      'player-score nord' + (data.currentPlayer==='north' && data.status==='playing' ? ' act-nord' : '');
+    document.getElementById('scoreSud').className =
+      'player-score sud'  + (data.currentPlayer==='south' && data.status==='playing' ? ' act-sud' : '');
+
+    // Status
+    const sl = document.getElementById('statusLine');
+    if (data.status === 'playing') {
+      const isMyTurn = data.currentPlayer === myRole;
+      if (isMyTurn) {
+        sl.className = 'status-line myturn';
+        sl.textContent = "🎯 C'est votre tour !";
+      } else {
+        sl.className = 'status-line wait';
+        sl.innerHTML = '<span class="spinner"></span> En attente du joueur ' +
+          (data.currentPlayer==='north'?'Nord':'Sud') + '...';
+      }
+    } else {
+      sl.className = 'status-line';
+      sl.textContent = 'Partie terminée';
+    }
+
+    // Plateau — quelles cases sont jouables ?
+    // On calcule les coups légaux uniquement pour notre rôle et si c'est notre tour
+    const isMyTurn = data.currentPlayer === myRole && data.status === 'playing';
+
+    // Nord
+    const rowNord = document.getElementById('rowNord');
+    rowNord.innerHTML = '';
+    for (let d = 6; d >= 0; d--) {
+      const seeds = data.board.north[d];
+      const legal = isMyTurn && myRole === 'north' && seeds > 0;
+      rowNord.appendChild(makePit('north', d, seeds, legal));
+    }
+
+    // Sud
+    const rowSud = document.getElementById('rowSud');
+    rowSud.innerHTML = '';
+    for (let d = 0; d <= 6; d++) {
+      const seeds = data.board.south[d];
+      const legal = isMyTurn && myRole === 'south' && seeds > 0;
+      rowSud.appendChild(makePit('south', d, seeds, legal));
+    }
+  }
+
+  function makePit(player, idx, seeds, isLegal) {
+    const pit = document.createElement('div');
+    pit.className = 'pit' + (isLegal ? ` legal ${player}` : '');
+
+    const bg = document.createElement('div');
+    bg.className = 'seeds-bg';
+    for (let k = 0; k < Math.min(seeds, 13); k++) {
+      const d = document.createElement('div'); d.className = 'seed-dot';
+      bg.appendChild(d);
+    }
+    pit.appendChild(bg);
+
+    const cnt = document.createElement('span');
+    cnt.className = 'count' + (seeds===0?' zero':'');
+    cnt.textContent = seeds;
+    pit.appendChild(cnt);
+
+    if (isLegal) pit.addEventListener('click', () => playMove(idx));
+    return pit;
+  }
+
+  /* -------------------------------------------------------
+     JOUER UN COUP (Ajax POST)
+     ------------------------------------------------------- */
+  function playMove(pitIndex) {
+    if (!myCode || !myToken) return;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}/play_move.php`, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function () {
+      if (xhr.status === 200) {
+        const data = JSON.parse(xhr.responseText);
+        handleGameData(data);
+        // Si ce n'est plus notre tour, relancer le polling
+        if (data.currentPlayer !== myRole && data.status === 'playing') {
+          startPolling();
+        }
+      } else {
+        const err = JSON.parse(xhr.responseText);
+        console.warn('Coup invalide :', err.error);
+      }
+    };
+    xhr.send(JSON.stringify({ code: myCode, token: myToken, pitIndex }));
+  }
+
+  /* -------------------------------------------------------
+     OVERLAY DE FIN DE PARTIE
+     ------------------------------------------------------- */
+  function showOverlay(data) {
+    const w = data.winner;
+    document.getElementById('overlayTitle').textContent =
+      w === 'draw' ? 'Match Nul !' : `Victoire ${w==='north'?'Nord':'Sud'} !`;
+
+    const wl = document.getElementById('overlayWinner');
+    if (w === 'draw') {
+      wl.className='winner-lbl draw'; wl.textContent='Égalité';
+    } else if (w === myRole) {
+      wl.className=`winner-lbl ${w}`; wl.textContent='🎉 Vous avez gagné !';
+    } else {
+      wl.className=`winner-lbl ${w}`; wl.textContent='Votre adversaire a gagné.';
+    }
+
+    document.getElementById('overlayReason').textContent = reasonText(data.reason);
+    document.getElementById('fNord').textContent = data.scores.north;
+    document.getElementById('fSud').textContent  = data.scores.south;
+    document.getElementById('overlay').classList.remove('hidden');
+  }
+
+  /* -------------------------------------------------------
+     RÉINITIALISATION
+     ------------------------------------------------------- */
+  function resetToLobby() {
+    stopPolling();
+    myCode = myToken = myRole = lastGame = null;
+
+    document.getElementById('overlay').classList.add('hidden');
+    document.getElementById('roleBadge').style.display = 'none';
+    document.getElementById('codeInput').value = '';
+    document.getElementById('joinError').classList.add('hidden');
+    document.getElementById('btnCreate').disabled = false;
+    document.getElementById('btnCreate').innerHTML = 'Créer une partie<div style="font-family:sans-serif;font-size:.78rem;color:var(--muted);margin-top:.2rem;font-weight:400;">Vous jouez en tant que <span style="color:var(--sud);font-weight:700;">Sud</span></div>';
+
+    hide('waiting');
+    hide('game');
+    show('lobby');
+  }
+
+  // Initialisation : afficher le lobby
+  show('lobby');
+  </script>
+</body>
+</html>

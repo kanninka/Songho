@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Songho — Jeu Local</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:     #1a0e00;
+      --board:  #2d1a00;
+      --pit:    #3d2600;
+      --seed:   #d4a84b;
+      --nord:   #5b9bd5;
+      --sud:    #e05c2a;
+      --border: #5a3a10;
+      --muted:  #8a6a40;
+    }
+    body {
+      background: var(--bg); color: #fff;
+      font-family: 'Georgia', serif;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 1rem; position: relative; overflow-x: hidden;
+    }
+    .dots {
+      position: fixed; inset: 0; pointer-events: none;
+      background-image: radial-gradient(circle, #fff8e8 1px, transparent 1px);
+      background-size: 24px 24px; opacity: .07;
+    }
+    header {
+      width: 100%; max-width: 860px; display: flex;
+      align-items: center; justify-content: space-between;
+      margin-bottom: 1.5rem; position: relative; z-index: 1;
+    }
+    .back { font-family:sans-serif; font-size:.85rem; color:var(--muted); text-decoration:none; }
+    .back:hover { color: var(--seed); }
+    .title-block { text-align: center; }
+    h1 { font-size: 2.8rem; color: var(--seed); }
+    .sub { font-family:sans-serif; font-size:.7rem; letter-spacing:.25em;
+           text-transform:uppercase; color:var(--muted); margin-top:.2rem; }
+
+    /* Score bar */
+    .score-bar {
+      width: 100%; max-width: 860px;
+      background: var(--board); border-radius: 1rem;
+      padding: 1rem 1.5rem; display: flex; align-items: center;
+      justify-content: space-between; position: relative; z-index: 1;
+      border: 1px solid var(--border);
+    }
+    .player-score {
+      display: flex; flex-direction: column; align-items: center;
+      padding: .6rem 1.2rem; border-radius: .75rem;
+      border: 2px solid transparent; transition: all .3s; min-width: 100px;
+    }
+    .player-score.active-nord { background:rgba(91,155,213,.15); border-color:var(--nord); }
+    .player-score.active-sud  { background:rgba(224,92,42,.15);  border-color:var(--sud);  }
+    .player-score .name { font-family:sans-serif; font-size:.75rem; font-weight:700;
+                          letter-spacing:.15em; text-transform:uppercase; margin-bottom:.25rem; }
+    .player-score.nord .name { color:var(--nord); }
+    .player-score.sud  .name { color:var(--sud); }
+    .player-score .pts  { font-size: 2.5rem; }
+    .turn-info { text-align:center; }
+    .turn-info .label { font-family:sans-serif; font-size:.7rem; letter-spacing:.15em;
+                        text-transform:uppercase; color:var(--muted); }
+    .turn-info .num { font-family:monospace; font-size:1.5rem; font-weight:700; color:var(--seed); }
+
+    /* Status */
+    .status-line {
+      height: 2rem; display: flex; align-items: center; justify-content: center;
+      font-family:sans-serif; font-size:1rem; font-weight:600;
+      position: relative; z-index:1;
+    }
+    .status-line.nord { color: var(--nord); }
+    .status-line.sud  { color: var(--sud); }
+
+    /* Board */
+    .board-wrap {
+      background: var(--board);
+      border-radius: 2.5rem;
+      padding: 2rem 2.5rem;
+      border: 3px solid var(--border);
+      box-shadow: 0 8px 40px rgba(0,0,0,.6);
+      display: flex; flex-direction: column; gap: 1.25rem;
+      position: relative; z-index:1;
+    }
+    .row { display: flex; gap: 1rem; justify-content: center; }
+    .sep { height: 3px; background: var(--pit); border-radius: 99px; opacity: .5; margin: 0 1rem; }
+
+    .pit {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--pit); border: 3px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      cursor: default; position: relative; transition: all .2s;
+      flex-shrink: 0;
+    }
+    .pit .count {
+      position: absolute; z-index: 2;
+      font-size: 1.5rem; font-weight: 700; color: #fff;
+      text-shadow: 0 1px 3px rgba(0,0,0,.8);
+    }
+    .pit .count.zero { color: rgba(90,58,16,.5); }
+    .pit.legal {
+      cursor: pointer;
+    }
+    .pit.legal.nord {
+      border-color: var(--nord);
+      box-shadow: 0 0 14px rgba(91,155,213,.5);
+    }
+    .pit.legal.sud {
+      border-color: var(--sud);
+      box-shadow: 0 0 14px rgba(224,92,42,.5);
+    }
+    .pit.legal:hover { transform: scale(1.1); }
+    .pit.flash { animation: flash .25s ease; }
+    @keyframes flash {
+      0%   { background: rgba(212,168,75,.35); }
+      100% { background: var(--pit); }
+    }
+    .seeds-bg {
+      position: absolute; inset: 8px; display: flex;
+      flex-wrap: wrap; align-items: center; justify-content: center;
+      gap: 2px; opacity: .35;
+    }
+    .seed-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--seed); }
+
+    /* Buttons */
+    .btn {
+      font-family:sans-serif; font-size:.9rem; font-weight:700;
+      padding: .75rem 2rem; border-radius: .75rem; cursor:pointer;
+      border: 2px solid var(--border); background: var(--pit); color: #fff;
+      transition: all .2s; position: relative; z-index:1;
+    }
+    .btn:hover { background: var(--board); border-color: var(--seed); }
+    .btn.primary { background: var(--seed); color: #1a0e00; border-color: var(--seed); }
+    .btn.primary:hover { opacity: .85; }
+
+    /* End overlay */
+    .overlay {
+      position: fixed; inset: 0; z-index: 50;
+      background: rgba(26,14,0,.85);
+      backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      animation: fadein .3s ease;
+    }
+    @keyframes fadein { from { opacity:0; } to { opacity:1; } }
+    .overlay.hidden { display: none; }
+    .overlay-card {
+      background: var(--board); border: 1px solid var(--border);
+      border-radius: 1.5rem; padding: 2.5rem;
+      max-width: 380px; width: 90%;
+      display: flex; flex-direction: column; align-items: center;
+      text-align: center; gap: 1rem;
+      box-shadow: 0 8px 48px rgba(0,0,0,.8);
+    }
+    .trophy { font-size: 3.5rem; }
+    .overlay-title { font-size: 2.2rem; color: #fff; }
+    .winner-label { font-size: 1.1rem; font-weight: 700; }
+    .winner-label.nord { color: var(--nord); }
+    .winner-label.sud  { color: var(--sud); }
+    .winner-label.draw { color: var(--seed); }
+    .reason { font-family:sans-serif; font-size:.85rem; color: var(--muted); }
+    .final-scores {
+      display: flex; gap: 2rem; align-items: center;
+      padding: .75rem 2rem; background: var(--pit); border-radius: .75rem;
+    }
+    .final-scores .s { display:flex;flex-direction:column;align-items:center;gap:.25rem; }
+    .final-scores .s .n { font-family:sans-serif;font-size:.8rem;font-weight:700;
+                           letter-spacing:.1em;text-transform:uppercase; }
+    .final-scores .s.nord .n { color:var(--nord); }
+    .final-scores .s.sud  .n { color:var(--sud);  }
+    .final-scores .s .v { font-size:2rem; }
+    .div-line { width:1px; height:100%;background:var(--border); }
+
+    footer {
+      margin-top: 1.5rem; font-family:sans-serif; font-size:.65rem;
+      letter-spacing:.2em; text-transform:uppercase;
+      color:rgba(138,106,64,.4); position:relative; z-index:1;
+    }
+
+    @media (max-width: 600px) {
+      .pit { width: 44px; height: 44px; }
+      .pit .count { font-size: 1rem; }
+      .board-wrap { padding: 1rem 1.2rem; gap: .75rem; }
+      .row { gap: .5rem; }
+      h1 { font-size: 2rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="dots"></div>
+
+  <header>
+    <a href="index.html" class="back">← Accueil</a>
+    <div class="title-block">
+      <h1>Songho</h1>
+      <div class="sub">Local — 2 Joueurs</div>
+    </div>
+    <div style="width:80px"></div>
+  </header>
+
+  <!-- Score -->
+  <div class="score-bar" id="scoreBar">
+    <div class="player-score nord" id="scoreNord">
+      <div class="name">Nord</div>
+      <div class="pts" id="ptsNord">0</div>
+    </div>
+    <div class="turn-info">
+      <div class="label">Tour</div>
+      <div class="num" id="moveNum">0</div>
+    </div>
+    <div class="player-score sud" id="scoreSud">
+      <div class="name">Sud</div>
+      <div class="pts" id="ptsSud">0</div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-line sud" id="statusLine" style="margin:.75rem 0;">Tour du joueur <strong>Sud</strong></div>
+
+  <!-- Board -->
+  <div class="board-wrap">
+    <!-- Rangée Nord (indices affichés de droite à gauche : 6,5,4,3,2,1,0) -->
+    <div class="row" id="rowNord"></div>
+    <div class="sep"></div>
+    <!-- Rangée Sud (indices affichés de gauche à droite : 0,1,2,3,4,5,6) -->
+    <div class="row" id="rowSud"></div>
+  </div>
+
+  <!-- Recommencer -->
+  <button class="btn" id="btnReset" style="margin-top:1.25rem;" onclick="resetGame()">Recommencer</button>
+
+  <footer>KANNINKA IYA ISAMEL &bull; 24G2152</footer>
+
+  <!-- Fin de partie -->
+  <div class="overlay hidden" id="overlay">
+    <div class="overlay-card">
+      <div class="trophy">🏆</div>
+      <div class="overlay-title" id="overlayTitle">Fin de partie</div>
+      <div class="winner-label" id="overlayWinner"></div>
+      <div class="reason" id="overlayReason"></div>
+      <div class="final-scores">
+        <div class="s nord">
+          <div class="n">Nord</div>
+          <div class="v" id="finalNord">0</div>
+        </div>
+        <div class="div-line"></div>
+        <div class="s sud">
+          <div class="n">Sud</div>
+          <div class="v" id="finalSud">0</div>
+        </div>
+      </div>
+      <button class="btn primary" onclick="resetGame()">Nouvelle partie</button>
+    </div>
+  </div>
+
+  <script>
+  /* ==========================================================
+     MOTEUR DE JEU SONGHO — JavaScript (traduit du TypeScript)
+     ========================================================== */
+
+  const CYCLE = [
+    {player:'north',i:0},{player:'north',i:1},{player:'north',i:2},
+    {player:'north',i:3},{player:'north',i:4},{player:'north',i:5},
+    {player:'north',i:6},
+    {player:'south',i:6},{player:'south',i:5},{player:'south',i:4},
+    {player:'south',i:3},{player:'south',i:2},{player:'south',i:1},
+    {player:'south',i:0},
+  ];
+
+  function other(p)    { return p === 'north' ? 'south' : 'north'; }
+  function sumArr(a)   { return a.reduce((s,v) => s+v, 0); }
+  function samePos(a,b){ return a.player === b.player && a.i === b.i; }
+
+  function cycleIndex(pos) {
+    return CYCLE.findIndex(c => c.player === pos.player && c.i === pos.i);
+  }
+
+  function nextPositions(source) {
+    const start = cycleIndex(source), out = [];
+    for (let s = 1; s <= 13; s++) out.push(CYCLE[(start+s) % CYCLE.length]);
+    return out;
+  }
+
+  function attackPit(p)       { return p==='north' ? {player:'north',i:6} : {player:'south',i:0}; }
+  function opponentFirstPit(p){ return p==='north' ? {player:'south',i:6} : {player:'north',i:0}; }
+
+  function opponentPath(p) {
+    return p === 'north'
+      ? [{player:'south',i:6},{player:'south',i:5},{player:'south',i:4},
+         {player:'south',i:3},{player:'south',i:2},{player:'south',i:1},{player:'south',i:0}]
+      : [{player:'north',i:0},{player:'north',i:1},{player:'north',i:2},
+         {player:'north',i:3},{player:'north',i:4},{player:'north',i:5},{player:'north',i:6}];
+  }
+
+  function isOpponentPit(p, pos) { return pos.player === other(p); }
+
+  /* --- État --- */
+  function createGame(start = 'south') {
+    return {
+      board: { north:[5,5,5,5,5,5,5], south:[5,5,5,5,5,5,5] },
+      scores: { north:0, south:0 },
+      currentPlayer: start,
+      status: 'playing', winner: null, reason: null,
+      moveNumber: 0, history: [],
+    };
+  }
+  function cloneState(s) {
+    return {
+      board: { north:[...s.board.north], south:[...s.board.south] },
+      scores: {...s.scores},
+      currentPlayer: s.currentPlayer,
+      status: s.status, winner: s.winner, reason: s.reason,
+      moveNumber: s.moveNumber, history: s.history.map(h=>({...h})),
+    };
+  }
+  function boardSeeds(s){ return sumArr(s.board.north)+sumArr(s.board.south); }
+
+  /* --- Semis --- */
+  function sowNormal(s, player, idx) {
+    const seeds = s.board[player][idx];
+    const source = {player, i: idx};
+    const visited = [];
+    s.board[player][idx] = 0;
+    const path = nextPositions(source);
+    for (let j = 0; j < seeds; j++) {
+      const pos = path[j];
+      s.board[pos.player][pos.i]++;
+      visited.push(pos);
+    }
+    return { visited, lastPosition: visited[visited.length-1], specialCapture:0 };
+  }
+
+  function sowGranary(s, player, idx) {
+    const seeds = s.board[player][idx];
+    const source = {player, i:idx};
+    const visited = [];
+    let remaining = seeds, specialCapture = 0;
+    s.board[player][idx] = 0;
+    for (const pos of nextPositions(source)) {
+      s.board[pos.player][pos.i]++;
+      visited.push(pos);
+      remaining--;
+    }
+    const path = opponentPath(player);
+    const firstPit = opponentFirstPit(player);
+    for (let j = 0; j < remaining; j++) {
+      const pos = path[j % path.length];
+      const isLast = j === remaining-1;
+      const isProtected = samePos(pos, firstPit);
+      if (isLast && isProtected) { specialCapture++; visited.push(pos); continue; }
+      s.board[pos.player][pos.i]++;
+      visited.push(pos);
+    }
+    return { visited, lastPosition: visited[visited.length-1], specialCapture };
+  }
+
+  function sow(s, player, idx) {
+    const seeds = s.board[player][idx];
+    if (seeds <= 0) throw new Error("Case vide");
+    return seeds <= 13 ? sowNormal(s,player,idx) : sowGranary(s,player,idx);
+  }
+
+  /* --- Captures --- */
+  function isCaptureVal(n) { return n===2||n===3||n===4; }
+
+  function canStartCapture(s, player, last) {
+    if (!isOpponentPit(player,last)) return false;
+    if (samePos(last, opponentFirstPit(player))) return false;
+    return isCaptureVal(s.board[last.player][last.i]);
+  }
+
+  function captureChain(s, player, last) {
+    const path = opponentPath(player);
+    const lastIdx = path.findIndex(p => samePos(p,last));
+    if (lastIdx <= 0) return [];
+    const out = [];
+    for (let idx = lastIdx; idx >= 0; idx--) {
+      const p = path[idx];
+      const cnt = s.board[p.player][p.i];
+      if (!isCaptureVal(cnt)) break;
+      out.push({ player:p.player, pitIndex:p.i, seeds:cnt });
+    }
+    return out;
+  }
+
+  function wouldEmpty(s, player, list) {
+    const opp = other(player);
+    const rem = [...s.board[opp]];
+    for (const c of list) rem[c.pitIndex] -= c.seeds;
+    return rem.reduce((a,b)=>a+b,0) === 0;
+  }
+
+  function resolveCaptures(s, player, sow) {
+    if (sow.specialCapture > 0) {
+      s.scores[player] += sow.specialCapture;
+      return { captured: sow.specialCapture, type:'special-granary' };
+    }
+    const last = sow.lastPosition;
+    if (!canStartCapture(s,player,last)) return { captured:0, type:'none' };
+    const list = captureChain(s,player,last);
+    if (!list.length) return { captured:0, type:'none' };
+    if (wouldEmpty(s,player,list)) return { captured:0, type:'none', starvation:true };
+    let total = 0;
+    for (const c of list) { s.board[c.player][c.pitIndex] -= c.seeds; total += c.seeds; }
+    s.scores[player] += total;
+    return { captured:total, type: list.length>1 ? 'chain':'normal' };
+  }
+
+  /* --- Coups légaux --- */
+  function isAttack(player, idx) { return samePos(attackPit(player), {player,i:idx}); }
+
+  function forbiddenAttack(s, player, idx) {
+    if (!isAttack(player,idx)) return false;
+    const seeds = s.board[player][idx];
+    if (seeds === 1) return true;
+    if (seeds === 2) {
+      const sim = cloneState(s);
+      const res = sowNormal(sim,player,idx);
+      return !canStartCapture(sim,player,res.lastPosition);
+    }
+    return false;
+  }
+
+  function delivered(s, player, idx) {
+    const sim = cloneState(s);
+    const before = sumArr(sim.board[other(player)]);
+    sow(sim,player,idx);
+    return sumArr(sim.board[other(player)]) - before;
+  }
+
+  function getSolidarityMoves(s, player) {
+    const candidates = [];
+    for (let i = 0; i < 7; i++)
+      if (s.board[player][i] > 0) candidates.push({player,pitIndex:i});
+    const ordinary = candidates.filter(m => !forbiddenAttack(s,player,m.pitIndex));
+    const enriched = ordinary.map(m => ({...m, del: delivered(s,player,m.pitIndex)}));
+    const ge7 = enriched.filter(m => m.del >= 7);
+    if (ge7.length) return ge7;
+    const pos = enriched.filter(m => m.del > 0);
+    if (pos.length) {
+      const max = Math.max(...pos.map(m=>m.del));
+      return pos.filter(m => m.del === max);
+    }
+    return candidates
+      .filter(m => isAttack(player,m.pitIndex) && [1,2].includes(s.board[player][m.pitIndex]))
+      .map(m => ({...m, forcedDonation:true}));
+  }
+
+  function getLegalMoves(s) {
+    const p = s.currentPlayer;
+    if (s.status !== 'playing') return [];
+    if (sumArr(s.board[other(p)]) === 0) return getSolidarityMoves(s,p);
+    const moves = [];
+    for (let i = 0; i < 7; i++)
+      if (s.board[p][i] > 0 && !forbiddenAttack(s,p,i))
+        moves.push({player:p, pitIndex:i});
+    return moves;
+  }
+
+  /* --- Fin de partie --- */
+  function collectRemaining(s) {
+    s.scores.north += sumArr(s.board.north);
+    s.scores.south += sumArr(s.board.south);
+    s.board.north = [0,0,0,0,0,0,0];
+    s.board.south = [0,0,0,0,0,0,0];
+  }
+  function winner(s) {
+    if (s.scores.north>=40) return 'north';
+    if (s.scores.south>=40) return 'south';
+    if (s.scores.north>s.scores.south) return 'north';
+    if (s.scores.south>s.scores.north) return 'south';
+    return 'draw';
+  }
+  function winnerStrict(s) {
+    if (s.scores.north>=40) return 'north';
+    if (s.scores.south>=40) return 'south';
+    return 'draw';
+  }
+  function endAfterMove(s) {
+    if (s.scores.north>=40 || s.scores.south>=40) {
+      s.status='ended'; s.reason='score_40'; s.winner=winner(s); return;
+    }
+    if (boardSeeds(s) < 10) {
+      collectRemaining(s); s.status='ended'; s.reason='low_board'; s.winner=winnerStrict(s);
+    }
+  }
+  function endBeforeTurn(s) {
+    if (getLegalMoves(s).length) return;
+    collectRemaining(s);
+    s.status='ended'; s.reason='solidarity_impossible'; s.winner=winnerStrict(s);
+  }
+
+  /* --- Appliquer un coup --- */
+  function applyMove(s, player, pitIndex) {
+    if (s.status!=='playing') return {ok:false, error:'Partie terminée'};
+    if (player!==s.currentPlayer) return {ok:false, error:"Pas ton tour"};
+    if (pitIndex<0||pitIndex>6) return {ok:false, error:'Case inconnue'};
+    if (s.board[player][pitIndex]<=0) return {ok:false, error:'Case vide'};
+    const legal = getLegalMoves(s);
+    const lm = legal.find(m => m.player===player && m.pitIndex===pitIndex);
+    if (!lm) return {ok:false, error:'Coup interdit'};
+
+    if (lm.forcedDonation) {
+      const seeds = s.board[player][pitIndex];
+      s.board[player][pitIndex] = 0;
+      s.scores[other(player)] += seeds;
+    } else {
+      const sowRes = sow(s, player, pitIndex);
+      resolveCaptures(s, player, sowRes);
+    }
+
+    s.moveNumber++;
+    endAfterMove(s);
+    if (s.status==='playing') {
+      s.currentPlayer = other(player);
+      endBeforeTurn(s);
+    }
+    return {ok:true};
+  }
+
+  /* ==========================================================
+     INTERFACE
+     ========================================================== */
+
+  let game = createGame('south');
+
+  function reasonText(r) {
+    const map = {
+      score_40: 'A atteint 40 graines !',
+      low_board: 'Moins de 10 graines sur le tablier',
+      solidarity_impossible: 'Impossible de nourrir l\'adversaire',
+      no_legal_move: 'Aucun coup légal possible',
+    };
+    return map[r] || '';
+  }
+
+  function buildPit(player, idx, seeds, isLegal, displayIdx) {
+    const pit = document.createElement('div');
+    pit.className = 'pit' + (isLegal ? ` legal ${player}` : '');
+    pit.id = `pit-${player}-${displayIdx}`;
+
+    // Graines décoratives
+    const bg = document.createElement('div');
+    bg.className = 'seeds-bg';
+    for (let k = 0; k < Math.min(seeds, 13); k++) {
+      const d = document.createElement('div');
+      d.className = 'seed-dot';
+      bg.appendChild(d);
+    }
+    pit.appendChild(bg);
+
+    const cnt = document.createElement('span');
+    cnt.className = 'count' + (seeds===0 ? ' zero' : '');
+    cnt.textContent = seeds;
+    pit.appendChild(cnt);
+
+    if (isLegal) {
+      pit.addEventListener('click', () => handleClick(player, idx));
+    }
+    return pit;
+  }
+
+  function render() {
+    const legal = getLegalMoves(game);
+    const legalSet = new Set(legal.map(m => `${m.player}-${m.pitIndex}`));
+
+    const rowNord = document.getElementById('rowNord');
+    const rowSud  = document.getElementById('rowSud');
+    rowNord.innerHTML = '';
+    rowSud.innerHTML  = '';
+
+    // Nord : affiché de droite à gauche (6→0) car face au Sud
+    for (let d = 6; d >= 0; d--) {
+      const seeds = game.board.north[d];
+      const isLegal = legalSet.has(`north-${d}`);
+      rowNord.appendChild(buildPit('north', d, seeds, isLegal, d));
+    }
+
+    // Sud : affiché de gauche à droite (0→6)
+    for (let d = 0; d <= 6; d++) {
+      const seeds = game.board.south[d];
+      const isLegal = legalSet.has(`south-${d}`);
+      rowSud.appendChild(buildPit('south', d, seeds, isLegal, d));
+    }
+
+    // Scores
+    document.getElementById('ptsNord').textContent = game.scores.north;
+    document.getElementById('ptsSud').textContent  = game.scores.south;
+    document.getElementById('moveNum').textContent  = game.moveNumber;
+
+    // Highlight joueur actif
+    document.getElementById('scoreNord').className =
+      'player-score nord' + (game.currentPlayer==='north' && game.status==='playing' ? ' active-nord' : '');
+    document.getElementById('scoreSud').className =
+      'player-score sud'  + (game.currentPlayer==='south' && game.status==='playing' ? ' active-sud' : '');
+
+    // Status
+    const sl = document.getElementById('statusLine');
+    if (game.status === 'playing') {
+      const p = game.currentPlayer;
+      sl.className = `status-line ${p}`;
+      sl.innerHTML = `Tour du joueur <strong>${p==='north'?'Nord':'Sud'}</strong>`;
+    } else {
+      sl.className = 'status-line';
+      sl.innerHTML = '<strong>Partie terminée</strong>';
+      showOverlay();
+    }
+  }
+
+  function showOverlay() {
+    const w = game.winner;
+    document.getElementById('overlayTitle').textContent =
+      w === 'draw' ? 'Match Nul !' : `Victoire ${w==='north'?'Nord':'Sud'} !`;
+
+    const wl = document.getElementById('overlayWinner');
+    if (w === 'draw') { wl.className='winner-label draw'; wl.textContent='Égalité'; }
+    else { wl.className=`winner-label ${w}`; wl.textContent=`Le joueur ${w==='north'?'Nord':'Sud'} gagne !`; }
+
+    document.getElementById('overlayReason').textContent = reasonText(game.reason);
+    document.getElementById('finalNord').textContent = game.scores.north;
+    document.getElementById('finalSud').textContent  = game.scores.south;
+    document.getElementById('overlay').classList.remove('hidden');
+  }
+
+  function handleClick(player, idx) {
+    if (game.status !== 'playing') return;
+    if (game.currentPlayer !== player) return;
+    const result = applyMove(game, player, idx);
+    if (result.ok) {
+      render();
+      // Flash cases semées
+      document.querySelectorAll('.pit').forEach(p => {
+        p.classList.add('flash');
+        setTimeout(() => p.classList.remove('flash'), 250);
+      });
+    }
+  }
+
+  function resetGame() {
+    game = createGame('south');
+    document.getElementById('overlay').classList.add('hidden');
+    render();
+  }
+
+  render();
+  </script>
+</body>
+</html>
