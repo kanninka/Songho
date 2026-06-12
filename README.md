@@ -1,27 +1,33 @@
-=========================================================
+
   SONGHO — Version HTML/CSS/JS + PHP
-  Auteur : KANNINKA IYA ISAMEL • 24G2152
-=========================================================
+  Auteur : KANNINKA IYA ISMAEL 24G2152
 
 STRUCTURE DES FICHIERS
------------------------
-songho-php/
-├── index.html          ← Page d'accueil (choix du mode)
-├── local.html          ← Jeu local 2 joueurs (même écran, tout en JS)
-├── remote.html         ← Jeu en réseau via Ajax
-├── api/
-│   ├── engine.php      ← Moteur de jeu Songho (logique pure PHP)
-│   ├── db.php          ← Connexion base de données SQLite
-│   ├── create_game.php ← POST : créer une nouvelle partie
-│   ├── get_game.php    ← GET  : lire l'état de la partie (polling Ajax)
-│   ├── join_game.php   ← POST : rejoindre en tant que Nord
-│   └── play_move.php   ← POST : jouer un coup
-└── data/               ← Créé automatiquement (base SQLite)
-    └── songho.sqlite
 
-=========================================================
-  INSTALLATION
-=========================================================
+songho-php/
+-index.html          -Page d'accueil (choix du mode)
+-local.html          
+Jeu local 2 joueurs (même écran, tout en JS)
+-remote.html         
+Jeu en réseau via Ajax
+api/
+    -engine.php      
+    Moteur de jeu Songho (logique pure PHP)
+     -db.php          
+     Connexion base de données SQLite
+     -create_game.php 
+     POST : créer une nouvelle partie
+     -get_game.php    
+     GET  : lire l'état de la partie (polling Ajax)
+      -join_game.php   
+      POST : rejoindre en tant que Nord
+      -play_move.php   
+      POST : jouer un coup
+      data/               
+      Créé automatiquement (base SQLite)
+
+
+       INSTALLATION
 
 1. PRÉREQUIS
    - PHP 8.0 ou supérieur avec l'extension PDO SQLite
@@ -41,9 +47,8 @@ songho-php/
    - Démarrez Apache
    - Ouvrez : http://localhost/songho-php/index.html
 
-=========================================================
+
   FONCTIONNEMENT
-=========================================================
 
 VERSION LOCALE (local.html)
   • Tout se passe dans le navigateur — aucun serveur PHP requis
